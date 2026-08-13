@@ -6,7 +6,7 @@ ESP32-S3-Touch-AMOLED-1.75C ESP32-S3 1.75Cinch AMOLED Touch Watch Development Bo
 
 ## 🔧 Configuration
 
-You can find detailed configuration information on the product wiki page
+Hardware specifications are documented in [HARDWARE.md](HARDWARE.md). You can also find detailed configuration information on the [product wiki](https://docs.waveshare.net/ESP32-S3-Touch-AMOLED-1.75C).
 
 ---
 
