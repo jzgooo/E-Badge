@@ -1,6 +1,6 @@
 # E-Badge 产品固件
 
-业务代码从这里开始。`examples/` 里的 Arduino / ESP-IDF 工程是厂商样例，只作对照，不要在那边加产品功能。
+业务代码从这里开始。产品范围见 [docs/PRD.md](../docs/PRD.md)（仅 Codex 额度展示）。`examples/` 里的 Arduino / ESP-IDF 工程是厂商样例，只作对照，不要在那边加产品功能。
 
 ## 目录
 
