@@ -85,7 +85,14 @@ BLE：广播名 **`Codex`**；一条 JSON 特征可读写。
 
 写入后：立刻刷新屏幕，写入 NVS。禁止经 BLE 传账号、Cookie、Key。
 
-GATT UUID 在实现时锁定，补到本节表下。过期用 `quota_updated_at` 与设备时间比较；设备时间以最近一次成功写入时电脑带下来的时间为准（实现写在 `badge` 组件注释里）。
+GATT UUID（已锁定）：
+
+| 项 | UUID |
+| --- | --- |
+| Service | `0xFF00` |
+| Characteristic（JSON 读写） | `0xFF01` |
+
+过期用 `quota_updated_at` 与设备时间比较；设备时间以最近一次成功写入时电脑带下来的时间为准（实现写在 `badge` 组件注释里）。无 RTC：重启后未再写入时先按正常环显示（选项 A），同一开机周期内用 `esp_timer` 计 24h。
 
 ## 6. 分工
 
