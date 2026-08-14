@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 
+/** Stable audio API (maintained on main). */
 esp_err_t audio_start(void);
 
 #ifdef __cplusplus

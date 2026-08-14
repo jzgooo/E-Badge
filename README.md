@@ -10,14 +10,15 @@ ESP32-S3-Touch-AMOLED-1.75C ESP32-S3 1.75Cinch AMOLED Touch Watch Development Bo
 
 | Path | Role |
 | --- | --- |
-| [`app/`](app/) | Product firmware. Business code starts here (`components/badge`, `ui`, `ble`, …). |
+| [`app/`](app/) | Base firmware on `main`: stable APIs + skeleton. Feature branches customize `src/`. |
 | [`docs/PRD.md`](docs/PRD.md) | Product requirements (Codex quota display). |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Branch model: `main` is the base, other branches do follow-on work. |
 | [`examples/`](examples/) | Waveshare Arduino / ESP-IDF samples. Treat as read-only reference. |
 | [`Firmware/`](Firmware/) | Factory binary. |
 | [`Schematic/`](Schematic/) | Hardware schematic PDF. |
 | [`HARDWARE.md`](HARDWARE.md) | Board specifications. |
 
-Build the product firmware with ESP-IDF 5.5+ from `app/` (see [`app/README.md`](app/README.md)).
+Build the **base** firmware with ESP-IDF 5.5+ from `app/` (see [`app/README.md`](app/README.md)). Product features (for example Codex quota UI) should be developed on a branch created from `main`. See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ---
 
@@ -29,12 +30,12 @@ Hardware specifications are documented in [HARDWARE.md](HARDWARE.md). You can al
 
 ## 🛠️ Contributing
 
-We welcome contributions! Here’s how you can help:
+`main` holds the base firmware and public headers. Do follow-on work on a branch from `main`; prefer changing `src/` rather than `include/` APIs. Details: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
+2. Branch from `main`.
 3. Commit your changes with clear descriptions.
-4. Submit a pull request for review.
+4. Submit a pull request (merge to `main` only when the **base/API** should change).
 
 ---
 

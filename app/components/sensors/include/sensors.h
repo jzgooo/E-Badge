@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 
+/** Stable sensors API (maintained on main). */
 esp_err_t sensors_start(void);
 
 #ifdef __cplusplus

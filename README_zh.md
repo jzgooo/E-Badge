@@ -2,7 +2,12 @@
 
 [English](README.md) | **中文**
 
-微雪 ESP32-S3 1.75 寸圆形 AMOLED 触摸开发板（466×466，QSPI，双麦，电子吧唧形态）。本仓库在厂商工程样例之上，产品固件只做 **Codex 额度展示**。
+微雪 ESP32-S3 1.75 寸圆形 AMOLED 触摸开发板（466×466，QSPI，双麦，电子吧唧形态）。本仓库在厂商工程样例之上：
+
+- **`main`**：基础固件（稳定接口 + 可运行骨架）
+- **其它分支**：基于 `main` 做二次开发（例如 Codex 额度屏）
+
+约定见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
 
 ---
 
@@ -10,20 +15,21 @@
 
 | 路径 | 作用 |
 | --- | --- |
-| [`app/`](app/) | 产品固件，业务代码从这里开始 |
-| [`docs/PRD.md`](docs/PRD.md) | 产品需求（仅 Codex 额度屏） |
+| [`app/`](app/) | `main` 上的基础固件：接口在 `include/`，骨架实现在 `src/` |
+| [`docs/PRD.md`](docs/PRD.md) | 产品需求（Codex 额度屏，在功能分支实现） |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | 分支约定：main 打底，其它分支二次开发 |
 | [`examples/`](examples/) | 微雪 Arduino / ESP-IDF 样例，只读对照 |
 | [`Firmware/`](Firmware/) | 出厂固件 bin |
 | [`Schematic/`](Schematic/) | 原理图 PDF |
 | [`HARDWARE.md`](HARDWARE.md) | 硬件规格 |
 
-产品固件请用 ESP-IDF 5.5+ 在 `app/` 下编译，详见 [`app/README.md`](app/README.md)。
+产品固件请用 ESP-IDF 5.5+ 在 `app/` 下编译，详见 [`app/README.md`](app/README.md)。二次开发请从 `main` 拉分支，不要直接在 `main` 上堆某一款产品的实现。
 
 ---
 
-## 产品（Codex 额度屏）
+## 产品方向（功能分支实现）
 
-圆屏只显示剩余额度（环 + 大数字）。数字由电脑经 BLE 推送，设备不登录 OpenAI。
+圆屏 Codex 额度展示的需求在 [docs/PRD.md](docs/PRD.md)。请在从 `main` 拉出的分支上实现画面与 BLE 字段，基础开屏与接口留在 `main`。
 
 ```bash
 cd app
@@ -44,12 +50,11 @@ idf.py -p <串口> flash monitor
 
 ## 参与贡献
 
-1. Fork 本仓库
-2. 新建分支开发
-3. 提交说明清楚的 commit
-4. 发起 Pull Request
+1. 从 `main` 拉分支（不要在 `main` 上直接做某一款产品）
+2. 优先改 `app/components/*/src/`，保持 `include/` 接口稳定
+3. 只有接口或骨架需要成为新基础时，再 PR 回 `main`
 
-产品功能请改 `app/`，不要在 `examples/` 里加业务。
+详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。`examples/` 不要加业务。
 
 ---
 
