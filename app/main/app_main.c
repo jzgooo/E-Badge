@@ -12,7 +12,7 @@ static const char *TAG = "app";
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "E-Badge starting");
+    ESP_LOGI(TAG, "Codex quota starting");
 
     ESP_ERROR_CHECK(board_init());
     ESP_ERROR_CHECK(badge_init());
@@ -21,5 +21,5 @@ void app_main(void)
     ESP_ERROR_CHECK(audio_start());
     ESP_ERROR_CHECK(ble_start());
 
-    ESP_LOGI(TAG, "E-Badge running");
+    ESP_LOGI(TAG, "Codex quota running");
 }

@@ -8,6 +8,7 @@
 #include "bsp/display.h"
 
 static const char *TAG = "board";
+static int s_brightness_percent = 70;
 
 esp_err_t board_init(void)
 {
@@ -24,7 +25,7 @@ esp_err_t board_init(void)
     }
 
     ESP_RETURN_ON_ERROR(bsp_display_backlight_on(), TAG, "backlight on failed");
-    ESP_RETURN_ON_ERROR(bsp_display_brightness_set(70), TAG, "brightness failed");
+    ESP_RETURN_ON_ERROR(board_brightness_set(70), TAG, "brightness failed");
 
     ESP_LOGI(TAG, "board ready");
     return ESP_OK;
@@ -38,4 +39,23 @@ bool board_display_lock(uint32_t timeout_ms)
 void board_display_unlock(void)
 {
     bsp_display_unlock();
+}
+
+esp_err_t board_brightness_set(int percent)
+{
+    if (percent < 0) {
+        percent = 0;
+    } else if (percent > 100) {
+        percent = 100;
+    }
+    esp_err_t err = bsp_display_brightness_set(percent);
+    if (err == ESP_OK) {
+        s_brightness_percent = percent;
+    }
+    return err;
+}
+
+int board_brightness_get(void)
+{
+    return s_brightness_percent;
 }

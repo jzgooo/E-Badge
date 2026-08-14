@@ -4,8 +4,6 @@
 #include <string.h>
 
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "host/ble_hs.h"
 #include "host/ble_uuid.h"
 #include "host/util/util.h"
@@ -16,40 +14,71 @@
 #include "services/gatt/ble_svc_gatt.h"
 
 static const char *TAG = "ble";
-static const char *DEVICE_NAME = "E-Badge";
+static const char *DEVICE_NAME = "Codex";
 
 void ble_store_config_init(void);
 
 static uint8_t s_own_addr_type;
 
-static int title_chr_access(uint16_t conn_handle, uint16_t attr_handle,
+/* Locked GATT UUIDs (also documented in docs/PRD.md §5). */
+static const ble_uuid16_t s_quota_svc_uuid = BLE_UUID16_INIT(0xFF00);
+static const ble_uuid16_t s_quota_chr_uuid = BLE_UUID16_INIT(0xFF01);
+
+#define QUOTA_JSON_MAX 192
+
+static int quota_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                             struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
     (void)conn_handle;
     (void)attr_handle;
     (void)arg;
 
-    if (ctxt->op != BLE_GATT_ACCESS_OP_READ_CHR) {
-        return BLE_ATT_ERR_UNLIKELY;
+    if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
+        char buf[QUOTA_JSON_MAX];
+        size_t n = 0;
+        esp_err_t err = badge_quota_to_json(buf, sizeof(buf), &n);
+        if (err != ESP_OK) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+        int rc = os_mbuf_append(ctxt->om, buf, n);
+        return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }
 
-    const char *title = badge_content_get_title();
-    int rc = os_mbuf_append(ctxt->om, title, strlen(title));
-    return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
-}
+    if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
+        uint16_t om_len = OS_MBUF_PKTLEN(ctxt->om);
+        if (om_len == 0 || om_len >= QUOTA_JSON_MAX) {
+            return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+        }
+        char buf[QUOTA_JSON_MAX];
+        uint16_t copied = 0;
+        int rc = ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf) - 1, &copied);
+        if (rc != 0) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+        buf[copied] = '\0';
 
-static const ble_uuid16_t s_badge_svc_uuid = BLE_UUID16_INIT(0xFF00);
-static const ble_uuid16_t s_title_chr_uuid = BLE_UUID16_INIT(0xFF01);
+        esp_err_t err = badge_quota_apply_json(buf, copied);
+        if (err == ESP_ERR_INVALID_ARG) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+        if (err != ESP_OK) {
+            return BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
+        return 0;
+    }
+
+    return BLE_ATT_ERR_UNLIKELY;
+}
 
 static const struct ble_gatt_svc_def s_gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
-        .uuid = &s_badge_svc_uuid.u,
+        .uuid = &s_quota_svc_uuid.u,
         .characteristics = (struct ble_gatt_chr_def[]){
             {
-                .uuid = &s_title_chr_uuid.u,
-                .access_cb = title_chr_access,
-                .flags = BLE_GATT_CHR_F_READ,
+                .uuid = &s_quota_chr_uuid.u,
+                .access_cb = quota_chr_access,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
             },
             {0},
         },
