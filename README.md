@@ -9,6 +9,7 @@ ESP32-S3-Touch-AMOLED-1.75C ESP32-S3 1.75Cinch AMOLED Touch Watch Development Bo
 | Path | Role |
 | --- | --- |
 | [`app/`](app/) | Product firmware. Business code starts here (`components/badge`, `ui`, `ble`, …). |
+| [`docs/PRD.md`](docs/PRD.md) | Product requirements (E-Badge). |
 | [`examples/`](examples/) | Waveshare Arduino / ESP-IDF samples. Treat as read-only reference. |
 | [`Firmware/`](Firmware/) | Factory binary. |
 | [`Schematic/`](Schematic/) | Hardware schematic PDF. |
