@@ -1,15 +1,40 @@
+# Nested git metadata / tooling leftovers (do not ignore .gitmodules, .gitattributes, .gitkeep)
 **/.git/
-
-**/.gitmodules
-**/.gitattributes
-**/.gitkeep
-**/.vscode
 **/.gitindex
 **/.gitlog
 **/.git-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
 **/.idea
+**/.vscode/settings.json
+cmake-build-*/
+*~
+*.swp
+*.swo
+
+# ESP-IDF build artifacts (keep sdkconfig.defaults and partitions.csv)
 **/build
 **/managed_components
-**/dependencies.lock
 **/sdkconfig
 **/sdkconfig.old
+compile_commands.json
+.cache/
+*.gcda
+*.gcno
+
+# Lock file: ignore vendor samples; keep app/ lock for reproducible BSP/LVGL versions
+**/dependencies.lock
+!app/dependencies.lock
+
+# Arduino / PlatformIO
+.pio/
+
+# Python / pytest-embedded
+__pycache__/
+*.pyc
+.pytest_cache/
+pytest-embedded/
