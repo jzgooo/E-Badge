@@ -43,10 +43,8 @@ Hardware specifications are documented in [HARDWARE.md](HARDWARE.md). You can al
 
 If you encounter any issues:
 
-- Check the [Issues](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75C/issues) section.
-- Create a new issue with detailed information.
-- Refer to the documentation for troubleshooting tips.
-- Contact the Waveshare team and provide the order number to obtain technical support.
+- This repository: [Issues](https://github.com/jzgooo/esp32-s3-badge/issues)
+- Hardware board: [Waveshare Issues](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75C/issues), or contact Waveshare with your order number.
 
 ---
 

@@ -1,5 +1,7 @@
 # E-Badge（ESP32-S3-Touch-AMOLED-1.75C）
 
+仓库：[jzgooo/esp32-s3-badge](https://github.com/jzgooo/esp32-s3-badge)
+
 [English](README.md) | **中文**
 
 微雪 ESP32-S3 1.75 寸圆形 AMOLED 触摸开发板（466×466，QSPI，双麦，电子吧唧形态）。本仓库在厂商工程样例之上：
@@ -60,7 +62,7 @@ idf.py -p <串口> flash monitor
 
 ## 问题与支持
 
-- 本仓库：[Issues](https://github.com/jzgooo/E-Badge/issues)
+- 本仓库：[Issues](https://github.com/jzgooo/esp32-s3-badge/issues)
 - 开发板本身：可参考[微雪 Issues](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75C/issues)，或凭订单号联系微雪
 
 ---
