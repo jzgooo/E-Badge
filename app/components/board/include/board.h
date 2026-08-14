@@ -9,7 +9,10 @@
 extern "C" {
 #endif
 
-/** Initialize NVS, display, and board-level peripherals. */
+/**
+ * Stable board API (maintained on main).
+ * Downstream branches should keep these signatures and extend src/board.c.
+ */
 esp_err_t board_init(void);
 
 bool board_display_lock(uint32_t timeout_ms);

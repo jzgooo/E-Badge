@@ -1,19 +1,21 @@
-# E-Badge 产品固件
+# E-Badge 基础固件
 
-业务代码从这里开始。产品范围见 [docs/PRD.md](../docs/PRD.md)（仅 Codex 额度展示）。`examples/` 里的 Arduino / ESP-IDF 工程是厂商样例，只作对照，不要在那边加产品功能。
+`main` 上的 `app/` 是**基础代码**：可编译的骨架 + 稳定接口（各组件 `include/`）。具体产品在从 `main` 拉出的分支上改 `src/` 做二次开发，约定见 [docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md)。
+
+产品方向见 [docs/PRD.md](../docs/PRD.md)。厂商 `examples/` 只读对照，不要在那边加业务。
 
 ## 目录
 
 ```
 app/
-├── main/                 # 组装入口：初始化顺序，不写具体业务
+├── main/                 # 组装入口：只调接口，不写业务细节
 └── components/
-    ├── board/            # 板级：NVS、显示、电源启动
-    ├── ui/               # 界面：表盘 / 徽章页 / 设置
-    ├── badge/            # 核心业务：徽章状态与展示内容
-    ├── sensors/          # 姿态等传感器（骨架）
-    ├── audio/            # 麦 / 喇叭（骨架）
-    └── ble/              # BLE 广播与 GATT
+    ├── board/            # 接口 board.h；实现：NVS、开屏
+    ├── ui/               # 接口 ui.h；实现：画面（二次开发主改这里）
+    ├── badge/            # 接口 badge.h；实现：展示内容
+    ├── sensors/          # 接口 sensors.h；骨架
+    ├── audio/            # 接口 audio.h；骨架
+    └── ble/              # 接口 ble.h；实现：广播 / GATT
 ```
 
 LVGL、官方 BSP（`waveshare/esp32_s3_touch_amoled_1_75c`）由 Component Manager 拉取，不要拷进 git。
