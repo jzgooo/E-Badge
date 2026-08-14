@@ -1,5 +1,7 @@
 # Waveshare ESP32-S3-Touch-AMOLED-1.75C Product Engineering Sample Program
 
+**English** | [中文](README_zh.md)
+
 ESP32-S3-Touch-AMOLED-1.75C ESP32-S3 1.75Cinch AMOLED Touch Watch Development Board, 466×466 Pixels, QSPI Interface, Onboard Dual Digital Microphones Array, ESP32 With Display
 
 ---
