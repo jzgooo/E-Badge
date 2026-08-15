@@ -12,6 +12,8 @@
 
 static int s_timeout_sec = 10; /* M1 仅 RAM；真正息屏是 M2 */
 static lv_obj_t *s_timeout_btns[3];
+static lv_obj_t *s_lab_batt;
+static lv_timer_t *s_batt_timer;
 
 /* 与主页同色板，设置页面板略提亮。 */
 #define COL_BG       0x0c0f14
@@ -21,6 +23,45 @@ static lv_obj_t *s_timeout_btns[3];
 #define COL_TEXT     0xf2efe8
 #define COL_MUTED    0x7a8494
 #define COL_DANGER   0xc45c5c
+
+#define BATT_REFRESH_MS 5000
+
+static void stop_batt_timer(void)
+{
+    if (s_batt_timer) {
+        lv_timer_delete(s_batt_timer);
+        s_batt_timer = NULL;
+    }
+}
+
+static void paint_battery_label(void)
+{
+    if (!s_lab_batt) {
+        return;
+    }
+    board_battery_t b;
+    char batt[48];
+    if (board_battery_get(&b) != ESP_OK || b.percent < 0) {
+        snprintf(batt, sizeof(batt), "电量: --");
+    } else if (b.millivolts > 0 && b.charging) {
+        snprintf(batt, sizeof(batt), "电量: %d%% 充电 %.2fV", b.percent,
+                 b.millivolts / 1000.0);
+    } else if (b.millivolts > 0) {
+        snprintf(batt, sizeof(batt), "电量: %d%% %.2fV", b.percent,
+                 b.millivolts / 1000.0);
+    } else if (b.charging) {
+        snprintf(batt, sizeof(batt), "电量: %d%% 充电", b.percent);
+    } else {
+        snprintf(batt, sizeof(batt), "电量: %d%%", b.percent);
+    }
+    lv_label_set_text(s_lab_batt, batt);
+}
+
+static void on_batt_timer(lv_timer_t *timer)
+{
+    LV_UNUSED(timer);
+    paint_battery_label();
+}
 
 /* 圆角内容块：亮度 / 息屏分区用。 */
 static void style_panel(lv_obj_t *obj)
@@ -64,6 +105,8 @@ static void refresh_timeout_chips(void)
 static void on_back_home(lv_event_t *event)
 {
     LV_UNUSED(event);
+    stop_batt_timer();
+    s_lab_batt = NULL;
     screen_home_show();
 }
 
@@ -84,12 +127,17 @@ static void on_timeout_clicked(lv_event_t *event)
 static void on_clear_quota(lv_event_t *event)
 {
     LV_UNUSED(event);
+    stop_batt_timer();
+    s_lab_batt = NULL;
     badge_quota_clear();
     screen_home_show();
 }
 
 void screen_settings_show(void)
 {
+    stop_batt_timer();
+    s_lab_batt = NULL;
+
     lv_obj_t *scr = lv_screen_active();
     lv_obj_clean(scr);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -154,14 +202,12 @@ void screen_settings_show(void)
     }
     refresh_timeout_chips();
 
-    /* 电量 / 版本：只读信息区 */
-    char batt[32];
-    snprintf(batt, sizeof(batt), "电量: --");
-    lv_obj_t *lab_batt = lv_label_create(scr);
-    lv_label_set_text(lab_batt, batt);
-    lv_obj_set_style_text_color(lab_batt, lv_color_hex(COL_MUTED), 0);
-    lv_obj_set_style_text_font(lab_batt, &font_cn_16, 0);
-    lv_obj_align(lab_batt, LV_ALIGN_TOP_MID, 0, 308);
+    /* 电量+电压 / 版本：只读信息区（电压并入电量行，避免被清除按钮挡住） */
+    s_lab_batt = lv_label_create(scr);
+    lv_obj_set_style_text_color(s_lab_batt, lv_color_hex(COL_MUTED), 0);
+    lv_obj_set_style_text_font(s_lab_batt, &font_cn_16, 0);
+    lv_obj_align(s_lab_batt, LV_ALIGN_TOP_MID, 0, 308);
+    paint_battery_label();
 
     char ver[64];
     snprintf(ver, sizeof(ver), "v%s · %s", APP_VERSION, APP_GIT_HASH);
@@ -169,7 +215,7 @@ void screen_settings_show(void)
     lv_label_set_text(lab_ver, ver);
     lv_obj_set_style_text_color(lab_ver, lv_color_hex(0x4a5563), 0);
     lv_obj_set_style_text_font(lab_ver, &lv_font_montserrat_16, 0);
-    lv_obj_align(lab_ver, LV_ALIGN_TOP_MID, 0, 334);
+    lv_obj_align(lab_ver, LV_ALIGN_TOP_MID, 0, 328);
 
     /* 危险操作：描边强调，避免误触主按钮观感。 */
     lv_obj_t *clear_btn = lv_button_create(scr);
@@ -199,4 +245,6 @@ void screen_settings_show(void)
     lv_obj_set_style_text_font(back_lab, &font_cn_16, 0);
     lv_obj_set_style_text_color(back_lab, lv_color_hex(0x0c0f14), 0);
     lv_obj_center(back_lab);
+
+    s_batt_timer = lv_timer_create(on_batt_timer, BATT_REFRESH_MS, NULL);
 }

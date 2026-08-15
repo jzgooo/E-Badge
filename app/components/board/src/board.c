@@ -13,6 +13,8 @@ static const char *TAG = "board";
 static int s_brightness_percent = 70;
 static lv_display_t *s_disp;
 
+extern esp_err_t board_pmu_init(void);
+
 /* ESP32-S3 数据缓存行 64 字节，PSRAM DMA 需要按此对齐。 */
 #define BOARD_FB_ALIGN 64
 
@@ -69,6 +71,11 @@ esp_err_t board_init(void)
 
     ESP_RETURN_ON_ERROR(bsp_display_backlight_on(), TAG, "backlight on failed");
     ESP_RETURN_ON_ERROR(board_brightness_set(70), TAG, "brightness failed");
+
+    /* 电量可读即可；失败不阻断开机。 */
+    if (board_pmu_init() != ESP_OK) {
+        ESP_LOGW(TAG, "PMU init failed, battery UI will show --");
+    }
 
     ESP_LOGI(TAG, "board ready");
     return ESP_OK;

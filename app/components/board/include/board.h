@@ -22,6 +22,18 @@ void board_display_unlock(void);
 esp_err_t board_brightness_set(int percent);
 int board_brightness_get(void);
 
+typedef struct {
+    int percent;      /* 0–100；未知 -1 */
+    int millivolts;   /* 电池电压 mV；无效 0 */
+    bool charging;
+    bool present;     /* 是否检测到电池 / 可读 */
+} board_battery_t;
+
+/**
+ * 读 AXP2101 电量与电压。PMU 未初始化或失败时 percent=-1、millivolts=0、present=false。
+ */
+esp_err_t board_battery_get(board_battery_t *out);
+
 #ifdef __cplusplus
 }
 #endif

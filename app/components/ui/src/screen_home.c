@@ -6,12 +6,16 @@
 
 #include "lvgl.h"
 
+#include <stdio.h>
+
 static lv_obj_t *s_arc_track;   /* 底环：固定铺满，衬托进度弧 */
 static lv_obj_t *s_arc;         /* 进度弧：remain_percent */
 static lv_obj_t *s_label_brand;
 static lv_obj_t *s_label_center;
 static lv_obj_t *s_label_caption;
 static lv_obj_t *s_label_hint;  /* 仅空数据时显示「等待同步」 */
+static lv_obj_t *s_label_batt;  /* 顶部电量小字 */
+static lv_timer_t *s_batt_timer;
 static bool s_home_active;
 
 /* 圆屏主色：暖墨底 + 薄荷绿进度；过期用暖灰。 */
@@ -25,10 +29,47 @@ static bool s_home_active;
 #define COL_MUTED     0x7a8494
 #define COL_HINT      0x4a5563
 
+#define BATT_REFRESH_MS 5000
+
+static void stop_batt_timer(void)
+{
+    if (s_batt_timer) {
+        lv_timer_delete(s_batt_timer);
+        s_batt_timer = NULL;
+    }
+}
+
+static void paint_battery(void)
+{
+    if (!s_label_batt) {
+        return;
+    }
+    board_battery_t b;
+    char buf[24];
+    if (board_battery_get(&b) != ESP_OK || b.percent < 0) {
+        snprintf(buf, sizeof(buf), "--");
+    } else if (b.charging) {
+        snprintf(buf, sizeof(buf), "%d%% 充电", b.percent);
+    } else {
+        snprintf(buf, sizeof(buf), "%d%%", b.percent);
+    }
+    lv_label_set_text(s_label_batt, buf);
+}
+
+static void on_batt_timer(lv_timer_t *timer)
+{
+    LV_UNUSED(timer);
+    if (!s_home_active) {
+        return;
+    }
+    paint_battery();
+}
+
 static void on_open_settings(lv_event_t *event)
 {
     LV_UNUSED(event);
     s_home_active = false;
+    stop_batt_timer();
     screen_settings_show();
 }
 
@@ -104,11 +145,15 @@ void screen_home_refresh(void)
         return;
     }
     paint_quota();
+    paint_battery();
     board_display_unlock();
 }
 
 void screen_home_show(void)
 {
+    stop_batt_timer();
+    s_label_batt = NULL;
+
     lv_obj_t *scr = lv_screen_active();
     lv_obj_clean(scr);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -148,6 +193,12 @@ void screen_home_show(void)
     lv_arc_set_range(s_arc, 0, 100);
     lv_arc_set_mode(s_arc, LV_ARC_MODE_NORMAL);
     style_quota_arc(s_arc, COL_ACCENT, 18);
+
+    /* 顶部电量，不抢额度环中心。 */
+    s_label_batt = lv_label_create(scr);
+    lv_obj_set_style_text_color(s_label_batt, lv_color_hex(COL_MUTED), 0);
+    lv_obj_set_style_text_font(s_label_batt, &font_cn_16, 0);
+    lv_obj_align(s_label_batt, LV_ALIGN_TOP_MID, 0, 28);
 
     s_label_brand = lv_label_create(scr);
     lv_label_set_text(s_label_brand, "CODEX");
@@ -194,4 +245,6 @@ void screen_home_show(void)
 
     s_home_active = true;
     paint_quota();
+    paint_battery();
+    s_batt_timer = lv_timer_create(on_batt_timer, BATT_REFRESH_MS, NULL);
 }
