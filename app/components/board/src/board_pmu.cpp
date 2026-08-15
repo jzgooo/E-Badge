@@ -6,6 +6,8 @@
 #include "driver/i2c_master.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "bsp/esp-bsp.h"
 
@@ -15,10 +17,12 @@ static const char *TAG = "board_pmu";
 
 #define PMU_I2C_TIMEOUT_MS 1000
 #define PMU_I2C_FREQ_HZ    400000
+#define PMU_POLL_MS        80
 
 static XPowersPMU s_pmu;
 static i2c_master_dev_handle_t s_pmu_dev;
 static bool s_pmu_ok;
+static board_pwr_event_cb_t s_pwr_cb;
 
 static int pmu_register_read(uint8_t devAddr, uint8_t regAddr, uint8_t *data, uint8_t len)
 {
@@ -45,6 +49,32 @@ static int pmu_register_write_byte(uint8_t devAddr, uint8_t regAddr, uint8_t *da
     esp_err_t ret = i2c_master_transmit(s_pmu_dev, buffer, len + 1, PMU_I2C_TIMEOUT_MS);
     free(buffer);
     return (ret == ESP_OK) ? 0 : -1;
+}
+
+static void pmu_poll_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        if (s_pmu_ok) {
+            s_pmu.getIrqStatus();
+            const bool short_press = s_pmu.isPekeyShortPressIrq();
+            const bool long_press = s_pmu.isPekeyLongPressIrq();
+            s_pmu.clearIrqStatus();
+
+            if (long_press) {
+                ESP_LOGI(TAG, "PWR long press");
+                if (s_pwr_cb) {
+                    s_pwr_cb(BOARD_PWR_EVENT_LONG);
+                }
+            } else if (short_press) {
+                ESP_LOGI(TAG, "PWR short press");
+                if (s_pwr_cb) {
+                    s_pwr_cb(BOARD_PWR_EVENT_SHORT);
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(PMU_POLL_MS));
+    }
 }
 
 extern "C" esp_err_t board_pmu_init(void)
@@ -75,12 +105,46 @@ extern "C" esp_err_t board_pmu_init(void)
         return ESP_FAIL;
     }
 
-    /* 只读电量/电压，不改各路电源开关。 */
     s_pmu.enableBattVoltageMeasure();
+    s_pmu.enableVbusVoltageMeasure();
+    s_pmu.disableTSPinMeasure();
+
+    /* 1.75C 上 AXP IRQ 不一定有可用 GPIO，改轮询状态寄存器。 */
+    s_pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+    s_pmu.clearIrqStatus();
+    s_pmu.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ | XPOWERS_AXP2101_PKEY_LONG_IRQ);
+
+    /* 短按只出 IRQ；长按关机时间留给软件处理（略拉长硬件关断窗口）。 */
+    s_pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S);
+
     s_pmu_ok = true;
     ESP_LOGI(TAG, "AXP2101 ready, battery=%d%% %dmV charging=%d",
              s_pmu.getBatteryPercent(), (int)s_pmu.getBattVoltage(),
              (int)s_pmu.isCharging());
+    return ESP_OK;
+}
+
+extern "C" esp_err_t board_pmu_start(void)
+{
+    if (!s_pmu_ok) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    BaseType_t ok = xTaskCreate(pmu_poll_task, "pmu_poll", 3072, nullptr, 5, nullptr);
+    return ok == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
+}
+
+extern "C" void board_pmu_set_event_cb(board_pwr_event_cb_t cb)
+{
+    s_pwr_cb = cb;
+}
+
+extern "C" esp_err_t board_pmu_shutdown(void)
+{
+    if (!s_pmu_ok) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    ESP_LOGW(TAG, "AXP2101 shutdown");
+    s_pmu.shutdown();
     return ESP_OK;
 }
 

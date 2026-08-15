@@ -3,6 +3,7 @@
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "nvs.h"
 #include "nvs_flash.h"
 
 #include "bsp/esp-bsp.h"
@@ -10,13 +11,103 @@
 #include "lvgl.h"
 
 static const char *TAG = "board";
-static int s_brightness_percent = 70;
+
+static const char *NVS_NS = "board";
+static const char *KEY_BRI = "bri";
+static const char *KEY_TO = "to";
+
+#define BRI_DEFAULT 70
+#define BRI_MIN 10
+#define BRI_LOW_BATT_CAP 35
+#define LOW_BATT_PERCENT 15
+#define TO_DEFAULT 10
+
+static int s_brightness_percent = BRI_DEFAULT;
+static int s_timeout_sec = TO_DEFAULT;
+static bool s_asleep;
 static lv_display_t *s_disp;
 
 extern esp_err_t board_pmu_init(void);
+extern esp_err_t board_pmu_start(void);
+extern esp_err_t board_pmu_shutdown(void);
+extern void board_pmu_set_event_cb(board_pwr_event_cb_t cb);
 
 /* ESP32-S3 数据缓存行 64 字节，PSRAM DMA 需要按此对齐。 */
 #define BOARD_FB_ALIGN 64
+
+static int clamp_bri(int percent)
+{
+    if (percent < BRI_MIN) {
+        return BRI_MIN;
+    }
+    if (percent > 100) {
+        return 100;
+    }
+    return percent;
+}
+
+static int sanitize_timeout(int sec)
+{
+    if (sec == 5 || sec == 10 || sec == 30) {
+        return sec;
+    }
+    return TO_DEFAULT;
+}
+
+static esp_err_t nvs_load_prefs(void)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NS, NVS_READONLY, &h);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_OK;
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    uint8_t bri = (uint8_t)s_brightness_percent;
+    uint8_t to = (uint8_t)s_timeout_sec;
+    if (nvs_get_u8(h, KEY_BRI, &bri) == ESP_OK) {
+        s_brightness_percent = clamp_bri(bri);
+    }
+    if (nvs_get_u8(h, KEY_TO, &to) == ESP_OK) {
+        s_timeout_sec = sanitize_timeout(to);
+    }
+    nvs_close(h);
+    return ESP_OK;
+}
+
+static esp_err_t nvs_save_u8(const char *key, uint8_t value)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = nvs_set_u8(h, key, value);
+    if (err == ESP_OK) {
+        err = nvs_commit(h);
+    }
+    nvs_close(h);
+    return err;
+}
+
+static int effective_brightness(void)
+{
+    if (s_asleep) {
+        return 0;
+    }
+
+    int bri = s_brightness_percent;
+    board_battery_t b;
+    if (board_battery_get(&b) == ESP_OK && b.present && !b.charging && b.percent >= 0 &&
+        b.percent < LOW_BATT_PERCENT) {
+        if (bri > BRI_LOW_BATT_CAP) {
+            bri = BRI_LOW_BATT_CAP;
+        }
+    }
+    return bri;
+}
 
 /*
  * BSP 默认用 50 行条带缓冲：SPI bounce 能进内部 RAM，但 466x466 会条带闪屏。
@@ -54,6 +145,8 @@ esp_err_t board_init(void)
     }
     ESP_RETURN_ON_ERROR(err, TAG, "nvs_flash_init failed");
 
+    (void)nvs_load_prefs();
+
     s_disp = bsp_display_start();
     if (s_disp == NULL) {
         ESP_LOGE(TAG, "bsp_display_start failed");
@@ -70,14 +163,17 @@ esp_err_t board_init(void)
     ESP_RETURN_ON_ERROR(err, TAG, "framebuffer upgrade failed");
 
     ESP_RETURN_ON_ERROR(bsp_display_backlight_on(), TAG, "backlight on failed");
-    ESP_RETURN_ON_ERROR(board_brightness_set(70), TAG, "brightness failed");
+    s_asleep = false;
+    board_brightness_reapply();
 
     /* 电量可读即可；失败不阻断开机。 */
     if (board_pmu_init() != ESP_OK) {
         ESP_LOGW(TAG, "PMU init failed, battery UI will show --");
+    } else if (board_pmu_start() != ESP_OK) {
+        ESP_LOGW(TAG, "PMU event poll failed to start");
     }
 
-    ESP_LOGI(TAG, "board ready");
+    ESP_LOGI(TAG, "board ready bri=%d to=%ds", s_brightness_percent, s_timeout_sec);
     return ESP_OK;
 }
 
@@ -94,19 +190,78 @@ void board_display_unlock(void)
 
 esp_err_t board_brightness_set(int percent)
 {
-    if (percent < 0) {
-        percent = 0;
-    } else if (percent > 100) {
-        percent = 100;
+    s_brightness_percent = clamp_bri(percent);
+    esp_err_t err = nvs_save_u8(KEY_BRI, (uint8_t)s_brightness_percent);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "brightness nvs save failed: %s", esp_err_to_name(err));
     }
-    esp_err_t err = bsp_display_brightness_set(percent);
-    if (err == ESP_OK) {
-        s_brightness_percent = percent;
-    }
-    return err;
+    board_brightness_reapply();
+    return ESP_OK;
 }
 
 int board_brightness_get(void)
 {
     return s_brightness_percent;
+}
+
+void board_brightness_reapply(void)
+{
+    int bri = effective_brightness();
+    esp_err_t err = bsp_display_brightness_set(bri);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "brightness set %d failed: %s", bri, esp_err_to_name(err));
+    }
+}
+
+esp_err_t board_display_sleep(void)
+{
+    if (s_asleep) {
+        return ESP_OK;
+    }
+    s_asleep = true;
+    ESP_LOGI(TAG, "display sleep");
+    return bsp_display_backlight_off();
+}
+
+esp_err_t board_display_wake(void)
+{
+    if (!s_asleep) {
+        board_brightness_reapply();
+        return ESP_OK;
+    }
+    s_asleep = false;
+    ESP_LOGI(TAG, "display wake");
+    board_brightness_reapply();
+    return ESP_OK;
+}
+
+bool board_display_is_asleep(void)
+{
+    return s_asleep;
+}
+
+int board_sleep_timeout_sec_get(void)
+{
+    return s_timeout_sec;
+}
+
+esp_err_t board_sleep_timeout_sec_set(int sec)
+{
+    s_timeout_sec = sanitize_timeout(sec);
+    esp_err_t err = nvs_save_u8(KEY_TO, (uint8_t)s_timeout_sec);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "timeout nvs save failed: %s", esp_err_to_name(err));
+    }
+    return ESP_OK;
+}
+
+void board_pwr_set_event_cb(board_pwr_event_cb_t cb)
+{
+    board_pmu_set_event_cb(cb);
+}
+
+esp_err_t board_shutdown(void)
+{
+    ESP_LOGW(TAG, "shutdown requested");
+    return board_pmu_shutdown();
 }

@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-static int s_timeout_sec = 10; /* M1 仅 RAM；真正息屏是 M2 */
 static lv_obj_t *s_timeout_btns[3];
 static lv_obj_t *s_lab_batt;
 static lv_timer_t *s_batt_timer;
@@ -95,9 +94,10 @@ static void style_chip(lv_obj_t *btn, bool selected)
 static void refresh_timeout_chips(void)
 {
     static const int timeouts[] = {5, 10, 30};
+    const int cur = board_sleep_timeout_sec_get();
     for (int i = 0; i < 3; i++) {
         if (s_timeout_btns[i]) {
-            style_chip(s_timeout_btns[i], timeouts[i] == s_timeout_sec);
+            style_chip(s_timeout_btns[i], timeouts[i] == cur);
         }
     }
 }
@@ -120,8 +120,9 @@ static void on_brightness(lv_event_t *event)
 static void on_timeout_clicked(lv_event_t *event)
 {
     int sec = (int)(intptr_t)lv_event_get_user_data(event);
-    s_timeout_sec = sec;
+    board_sleep_timeout_sec_set(sec);
     refresh_timeout_chips();
+    lv_display_trigger_activity(NULL);
 }
 
 static void on_clear_quota(lv_event_t *event)
@@ -173,7 +174,7 @@ void screen_settings_show(void)
     lv_obj_set_style_pad_all(slider, 6, LV_PART_KNOB);
     lv_obj_add_event_cb(slider, on_brightness, LV_EVENT_VALUE_CHANGED, NULL);
 
-    /* 息屏时间面板（M2 才真正生效，M1 只记选项） */
+    /* 息屏时间：写入 NVS，由 ui 电源定时器真正息屏 */
     lv_obj_t *panel_to = lv_obj_create(scr);
     lv_obj_set_size(panel_to, 300, 100);
     lv_obj_align(panel_to, LV_ALIGN_TOP_MID, 0, 192);
@@ -202,7 +203,7 @@ void screen_settings_show(void)
     }
     refresh_timeout_chips();
 
-    /* 电量+电压 / 版本：只读信息区（电压并入电量行，避免被清除按钮挡住） */
+    /* 电量+电压 / 版本：只读信息区 */
     s_lab_batt = lv_label_create(scr);
     lv_obj_set_style_text_color(s_lab_batt, lv_color_hex(COL_MUTED), 0);
     lv_obj_set_style_text_font(s_lab_batt, &font_cn_16, 0);
@@ -217,7 +218,6 @@ void screen_settings_show(void)
     lv_obj_set_style_text_font(lab_ver, &lv_font_montserrat_16, 0);
     lv_obj_align(lab_ver, LV_ALIGN_TOP_MID, 0, 328);
 
-    /* 危险操作：描边强调，避免误触主按钮观感。 */
     lv_obj_t *clear_btn = lv_button_create(scr);
     lv_obj_set_size(clear_btn, 200, 44);
     lv_obj_align(clear_btn, LV_ALIGN_BOTTOM_MID, 0, -92);

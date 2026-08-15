@@ -4,7 +4,7 @@ idf_component_register(
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "src" "${CMAKE_CURRENT_BINARY_DIR}"
     REQUIRES badge board
-    PRIV_REQUIRES lvgl__lvgl
+    PRIV_REQUIRES lvgl__lvgl esp_timer
 )
 
 # Version string for settings page

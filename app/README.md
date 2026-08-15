@@ -4,11 +4,13 @@
 
 产品方向见 [docs/PRD.md](../docs/PRD.md)。厂商 `examples/` 只读对照，不要在那边加业务。
 
-## 本分支 M1 行为
+## 本分支 M1+M2 行为
 
 - 广播名 **`Codex`**
 - GATT：服务 `0xFF00`，特征 `0xFF01`（JSON 读写四字段）
-- 主界面：剩余额度环；长按进设置；Clear quota 清 NVS
+- 主界面：剩余额度环；Clear quota 清 NVS
+- 息屏：设置 5/10/30 秒（NVS）；点按亮屏；PWR 短按亮屏/进设置、长按关机
+- 低电 &lt;15% 降亮度；充电时顶部电量点闪烁；过期灰环会定时刷新
 - 验收示例（nRF Connect 写入）：
 
 ```json

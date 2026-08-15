@@ -143,4 +143,4 @@ GATT UUID（已锁定）：
 | 低电 | 降亮度，不强制关机 |
 | 双环 | 不做，用 caption 区分窗口 |
 
-仍待实现时填写：特征 UUID。
+GATT UUID 已锁定：Service `0xFF00`，Characteristic `0xFF01`。

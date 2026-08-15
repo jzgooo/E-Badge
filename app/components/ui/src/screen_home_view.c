@@ -6,6 +6,8 @@
 
 #include "lvgl.h"
 
+#include "esp_timer.h"
+
 #include <stdio.h>
 
 static lv_obj_t *s_arc_track;   /* 底环：固定铺满，衬托进度弧 */
@@ -15,8 +17,11 @@ static lv_obj_t *s_label_center;
 static lv_obj_t *s_label_caption;
 static lv_obj_t *s_label_hint;  /* 仅空数据时显示「等待同步」 */
 static lv_obj_t *s_label_batt;  /* 顶部电量小字 */
+static lv_obj_t *s_batt_dot;    /* 充电闪烁点 */
 static lv_timer_t *s_batt_timer;
 static bool s_home_active;
+static bool s_dot_on;
+static int64_t s_last_blink_us;
 
 /* 圆屏主色：暖墨底 + 薄荷绿进度；过期用暖灰。 */
 #define COL_BG        0x0c0f14
@@ -28,8 +33,11 @@ static bool s_home_active;
 #define COL_TEXT      0xf2efe8
 #define COL_MUTED     0x7a8494
 #define COL_HINT      0x4a5563
+#define COL_CHARGE    0x3dceb0
 
-#define BATT_REFRESH_MS 5000
+#define BATT_REFRESH_MS 1000
+
+static void paint_quota(void);
 
 static void stop_batt_timer(void)
 {
@@ -48,12 +56,36 @@ static void paint_battery(void)
     char buf[24];
     if (board_battery_get(&b) != ESP_OK || b.percent < 0) {
         snprintf(buf, sizeof(buf), "--");
-    } else if (b.charging) {
-        snprintf(buf, sizeof(buf), "%d%% 充电", b.percent);
-    } else {
-        snprintf(buf, sizeof(buf), "%d%%", b.percent);
+        if (s_batt_dot) {
+            lv_obj_add_flag(s_batt_dot, LV_OBJ_FLAG_HIDDEN);
+        }
+        lv_label_set_text(s_label_batt, buf);
+        return;
     }
+
+    snprintf(buf, sizeof(buf), "%d%%", b.percent);
     lv_label_set_text(s_label_batt, buf);
+
+    if (!s_batt_dot) {
+        return;
+    }
+
+    if (b.charging) {
+        lv_obj_remove_flag(s_batt_dot, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(s_batt_dot, lv_color_hex(COL_CHARGE), 0);
+        const int64_t now = esp_timer_get_time();
+        if (now - s_last_blink_us >= 500000) {
+            s_dot_on = !s_dot_on;
+            s_last_blink_us = now;
+        }
+        lv_obj_set_style_bg_opa(s_batt_dot, s_dot_on ? LV_OPA_COVER : LV_OPA_20, 0);
+    } else if (b.percent < 15) {
+        lv_obj_remove_flag(s_batt_dot, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(s_batt_dot, lv_color_hex(0xc45c5c), 0);
+        lv_obj_set_style_bg_opa(s_batt_dot, LV_OPA_COVER, 0);
+    } else {
+        lv_obj_add_flag(s_batt_dot, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 static void on_batt_timer(lv_timer_t *timer)
@@ -62,15 +94,23 @@ static void on_batt_timer(lv_timer_t *timer)
     if (!s_home_active) {
         return;
     }
+    paint_quota();
     paint_battery();
 }
 
-static void on_open_settings(lv_event_t *event)
+void screen_open_settings(void)
 {
-    LV_UNUSED(event);
+    if (!s_home_active) {
+        return;
+    }
     s_home_active = false;
     stop_batt_timer();
     screen_settings_show();
+}
+
+bool screen_home_is_active(void)
+{
+    return s_home_active;
 }
 
 static void style_quota_arc(lv_obj_t *arc, uint32_t color, int width)
@@ -141,18 +181,17 @@ void screen_home_refresh(void)
     if (!s_home_active) {
         return;
     }
-    if (!board_display_lock(200)) {
-        return;
-    }
+    /* 调用方已在 LVGL 线程（async / timer），勿再 board_display_lock。 */
     paint_quota();
     paint_battery();
-    board_display_unlock();
 }
 
 void screen_home_show(void)
 {
     stop_batt_timer();
     s_label_batt = NULL;
+    s_batt_dot = NULL;
+    s_dot_on = true;
 
     lv_obj_t *scr = lv_screen_active();
     lv_obj_clean(scr);
@@ -195,10 +234,22 @@ void screen_home_show(void)
     style_quota_arc(s_arc, COL_ACCENT, 18);
 
     /* 顶部电量，不抢额度环中心。 */
+    s_batt_dot = lv_obj_create(scr);
+    lv_obj_set_size(s_batt_dot, 10, 10);
+    lv_obj_align(s_batt_dot, LV_ALIGN_TOP_MID, -34, 32);
+    lv_obj_set_style_radius(s_batt_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_batt_dot, lv_color_hex(COL_CHARGE), 0);
+    lv_obj_set_style_bg_opa(s_batt_dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_batt_dot, 0, 0);
+    lv_obj_set_style_pad_all(s_batt_dot, 0, 0);
+    lv_obj_remove_flag(s_batt_dot, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_batt_dot, LV_OBJ_FLAG_HIDDEN);
+
     s_label_batt = lv_label_create(scr);
     lv_obj_set_style_text_color(s_label_batt, lv_color_hex(COL_MUTED), 0);
     lv_obj_set_style_text_font(s_label_batt, &font_cn_16, 0);
-    lv_obj_align(s_label_batt, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_align(s_label_batt, LV_ALIGN_TOP_MID, 8, 28);
+    lv_obj_remove_flag(s_label_batt, LV_OBJ_FLAG_CLICKABLE);
 
     s_label_brand = lv_label_create(scr);
     lv_label_set_text(s_label_brand, "CODEX");
@@ -206,11 +257,13 @@ void screen_home_show(void)
     lv_obj_set_style_text_font(s_label_brand, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_letter_space(s_label_brand, 4, 0);
     lv_obj_align(s_label_brand, LV_ALIGN_CENTER, 0, -58);
+    lv_obj_remove_flag(s_label_brand, LV_OBJ_FLAG_CLICKABLE);
 
     s_label_center = lv_label_create(scr);
     lv_obj_set_style_text_color(s_label_center, lv_color_hex(COL_TEXT), 0);
     lv_obj_set_style_text_font(s_label_center, &lv_font_montserrat_28, 0);
     lv_obj_align(s_label_center, LV_ALIGN_CENTER, 0, -4);
+    lv_obj_remove_flag(s_label_center, LV_OBJ_FLAG_CLICKABLE);
 
     s_label_caption = lv_label_create(scr);
     lv_obj_set_style_text_color(s_label_caption, lv_color_hex(COL_MUTED), 0);
@@ -219,29 +272,14 @@ void screen_home_show(void)
     lv_obj_set_style_text_align(s_label_caption, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(s_label_caption, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(s_label_caption, 220);
+    lv_obj_remove_flag(s_label_caption, LV_OBJ_FLAG_CLICKABLE);
 
     s_label_hint = lv_label_create(scr);
     lv_label_set_text(s_label_hint, "等待同步");
     lv_obj_set_style_text_color(s_label_hint, lv_color_hex(COL_HINT), 0);
     lv_obj_set_style_text_font(s_label_hint, &font_cn_16, 0);
     lv_obj_align(s_label_hint, LV_ALIGN_CENTER, 0, 68);
-
-    /* 独立按钮进设置；勿用整屏 LONG_PRESSED（父对象事件在 clean 后仍可能残留）。 */
-    lv_obj_t *settings = lv_button_create(scr);
-    lv_obj_set_size(settings, 88, 36);
-    lv_obj_align(settings, LV_ALIGN_BOTTOM_MID, 0, -28);
-    lv_obj_set_style_radius(settings, 18, 0);
-    lv_obj_set_style_bg_color(settings, lv_color_hex(0x1a222c), 0);
-    lv_obj_set_style_bg_opa(settings, LV_OPA_COVER, 0);
-    lv_obj_set_style_shadow_width(settings, 0, 0);
-    lv_obj_set_style_border_width(settings, 1, 0);
-    lv_obj_set_style_border_color(settings, lv_color_hex(0x2c3844), 0);
-    lv_obj_add_event_cb(settings, on_open_settings, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *settings_lab = lv_label_create(settings);
-    lv_label_set_text(settings_lab, "设置");
-    lv_obj_set_style_text_font(settings_lab, &font_cn_16, 0);
-    lv_obj_set_style_text_color(settings_lab, lv_color_hex(COL_MUTED), 0);
-    lv_obj_center(settings_lab);
+    lv_obj_remove_flag(s_label_hint, LV_OBJ_FLAG_CLICKABLE);
 
     s_home_active = true;
     paint_quota();
