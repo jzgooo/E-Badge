@@ -26,6 +26,12 @@ static void on_quota_changed(void)
     lv_async_call(on_quota_changed_async, NULL);
 }
 
+static void on_dashboard_changed(void)
+{
+    /* Dashboard writes use the same BLE host task as legacy quota writes. */
+    lv_async_call(on_quota_changed_async, NULL);
+}
+
 static void wake_from_ui(void)
 {
     board_display_wake();
@@ -87,6 +93,7 @@ static void on_power_timer(lv_timer_t *timer)
 esp_err_t ui_start(void)
 {
     badge_quota_set_changed_cb(on_quota_changed);
+    badge_dashboard_set_changed_cb(on_dashboard_changed);
     board_pwr_set_event_cb(on_pwr_event);
 
     if (!board_display_lock(1000)) {

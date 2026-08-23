@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "default_card": "quota",
+  "cards": [
+    {
+      "id": "quota",
+      "percent": 72,
+      "label": "72%",
+      "caption": "代码助手 5小时",
+      "updated_at": 1780000000,
+      "ttl_sec": 86400,
+      "severity": "normal"
+    },
+    {
+      "id": "build",
+      "percent": 255,
+      "label": "失败",
+      "caption": "main #183",
+      "updated_at": 1780000000,
+      "ttl_sec": 7200,
+      "severity": "critical"
+    },
+    {
+      "id": "focus",
+      "percent": 60,
+      "label": "专注",
+      "caption": "深度工作",
+      "updated_at": 1780000000,
+      "ttl_sec": 3600,
+      "target_at": 1780001500,
+      "severity": "normal"
+    },
+    {
+      "id": "schedule",
+      "percent": 255,
+      "label": "会议",
+      "caption": "项目同步",
+      "updated_at": 1780000000,
+      "ttl_sec": 900,
+      "target_at": 1780000480,
+      "severity": "near"
+    }
+  ]
+}

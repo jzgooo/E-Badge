@@ -23,6 +23,10 @@ static int64_t s_boot_us;
 static int64_t s_last_write_boot_us; /* 0 = no write this boot */
 static badge_quota_changed_cb_t s_changed_cb;
 
+/* Dashboard implementation remains private to the badge component. */
+extern esp_err_t badge_dashboard_init(void);
+extern esp_err_t badge_dashboard_apply_legacy_quota(const badge_quota_t *quota);
+
 static void notify_changed(void)
 {
     if (s_changed_cb) {
@@ -165,6 +169,10 @@ esp_err_t badge_init(void)
         ESP_LOGW(TAG, "nvs load failed: %s — starting empty", esp_err_to_name(err));
         reset_empty();
     }
+    err = badge_dashboard_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "dashboard init failed: %s", esp_err_to_name(err));
+    }
     ESP_LOGI(TAG, "badge init, empty=%d pct=%u updated=%lld", badge_quota_is_empty(),
              s_quota.remain_percent, (long long)s_quota.quota_updated_at);
     return ESP_OK;
@@ -254,6 +262,11 @@ esp_err_t badge_quota_apply_json(const char *json, size_t len)
     ESP_LOGI(TAG, "quota applied pct=%u label=%s caption=%s updated=%lld",
              s_quota.remain_percent, s_quota.remain_label, s_quota.quota_caption,
              (long long)s_quota.quota_updated_at);
+    /* A legacy client can keep the quota card current after dashboard upgrade. */
+    err = badge_dashboard_apply_legacy_quota(&s_quota);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "legacy quota dashboard bridge failed: %s", esp_err_to_name(err));
+    }
     notify_changed();
     return ESP_OK;
 }

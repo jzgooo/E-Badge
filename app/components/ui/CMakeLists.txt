@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "src/ui.c" "src/screen_home_view.c" "src/screen_settings_view.c"
+    SRCS "src/ui.c" "src/screen_home_view.c" "src/screen_settings_view.c" "src/screen_dashboard_settings.c"
          "src/fonts/font_cn_16.c" "src/fonts/font_cn_22.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "src" "${CMAKE_CURRENT_BINARY_DIR}"

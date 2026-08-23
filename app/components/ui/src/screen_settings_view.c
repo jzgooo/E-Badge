@@ -130,8 +130,17 @@ static void on_clear_quota(lv_event_t *event)
     LV_UNUSED(event);
     stop_batt_timer();
     s_lab_batt = NULL;
+    badge_dashboard_clear();
     badge_quota_clear();
     screen_home_show();
+}
+
+static void on_open_cards(lv_event_t *event)
+{
+    LV_UNUSED(event);
+    stop_batt_timer();
+    s_lab_batt = NULL;
+    screen_dashboard_settings_show();
 }
 
 void screen_settings_show(void)
@@ -207,7 +216,7 @@ void screen_settings_show(void)
     s_lab_batt = lv_label_create(scr);
     lv_obj_set_style_text_color(s_lab_batt, lv_color_hex(COL_MUTED), 0);
     lv_obj_set_style_text_font(s_lab_batt, &font_cn_16, 0);
-    lv_obj_align(s_lab_batt, LV_ALIGN_TOP_MID, 0, 308);
+    lv_obj_align(s_lab_batt, LV_ALIGN_TOP_MID, 0, 300);
     paint_battery_label();
 
     char ver[64];
@@ -216,11 +225,26 @@ void screen_settings_show(void)
     lv_label_set_text(lab_ver, ver);
     lv_obj_set_style_text_color(lab_ver, lv_color_hex(0x4a5563), 0);
     lv_obj_set_style_text_font(lab_ver, &lv_font_montserrat_16, 0);
-    lv_obj_align(lab_ver, LV_ALIGN_TOP_MID, 0, 328);
+    lv_obj_align(lab_ver, LV_ALIGN_TOP_MID, 0, 322);
+
+    lv_obj_t *cards_btn = lv_button_create(scr);
+    lv_obj_set_size(cards_btn, 130, 44);
+    lv_obj_align(cards_btn, LV_ALIGN_BOTTOM_MID, -76, -92);
+    lv_obj_set_style_radius(cards_btn, 22, 0);
+    lv_obj_set_style_bg_color(cards_btn, lv_color_hex(0x1a222c), 0);
+    lv_obj_set_style_border_width(cards_btn, 1, 0);
+    lv_obj_set_style_border_color(cards_btn, lv_color_hex(COL_BORDER), 0);
+    lv_obj_set_style_shadow_width(cards_btn, 0, 0);
+    lv_obj_add_event_cb(cards_btn, on_open_cards, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *cards_lab = lv_label_create(cards_btn);
+    lv_label_set_text(cards_lab, "卡片");
+    lv_obj_set_style_text_font(cards_lab, &font_cn_16, 0);
+    lv_obj_set_style_text_color(cards_lab, lv_color_hex(COL_TEXT), 0);
+    lv_obj_center(cards_lab);
 
     lv_obj_t *clear_btn = lv_button_create(scr);
-    lv_obj_set_size(clear_btn, 200, 44);
-    lv_obj_align(clear_btn, LV_ALIGN_BOTTOM_MID, 0, -92);
+    lv_obj_set_size(clear_btn, 130, 44);
+    lv_obj_align(clear_btn, LV_ALIGN_BOTTOM_MID, 76, -92);
     lv_obj_set_style_radius(clear_btn, 22, 0);
     lv_obj_set_style_bg_color(clear_btn, lv_color_hex(0x2a1c1c), 0);
     lv_obj_set_style_border_width(clear_btn, 1, 0);
@@ -228,7 +252,7 @@ void screen_settings_show(void)
     lv_obj_set_style_shadow_width(clear_btn, 0, 0);
     lv_obj_add_event_cb(clear_btn, on_clear_quota, LV_EVENT_CLICKED, NULL);
     lv_obj_t *clear_lab = lv_label_create(clear_btn);
-    lv_label_set_text(clear_lab, "清除额度");
+    lv_label_set_text(clear_lab, "清除");
     lv_obj_set_style_text_font(clear_lab, &font_cn_16, 0);
     lv_obj_set_style_text_color(clear_lab, lv_color_hex(0xe8a0a0), 0);
     lv_obj_center(clear_lab);

@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "开发者桌面状态徽章：代码助手额度",
+  "version": "0.1.0",
+  "description": "将用量页面可见的代码助手额度发送给本机蓝牙徽章。",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_title": "同步代码助手额度", "default_popup": "popup.html"},
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
