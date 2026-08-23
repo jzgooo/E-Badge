@@ -19,10 +19,76 @@ static const char *TAG = "board_pmu";
 #define PMU_I2C_FREQ_HZ    400000
 #define PMU_POLL_MS        80
 
+/* 满电判定：低于此电压时不显示 100%（AXP 电量计常在 ~4.14V 就报满）。 */
+#define BATT_FULL_MV 4180
+
 static XPowersPMU s_pmu;
 static i2c_master_dev_handle_t s_pmu_dev;
 static bool s_pmu_ok;
 static board_pwr_event_cb_t s_pwr_cb;
+
+/**
+ * 单节锂电开路电压粗估 SOC。充电时端电压偏高，调用方需自行折中。
+ * 表点为典型 3.7V 聚合物电芯近似值。
+ */
+static int soc_from_voltage_mv(int mv)
+{
+    static const int points[][2] = {
+        {4200, 100}, {4150, 95},  {4110, 90},  {4070, 85},  {4030, 80},
+        {3990, 75},  {3950, 70},  {3910, 65},  {3870, 60},  {3830, 55},
+        {3790, 50},  {3750, 45},  {3710, 40},  {3670, 35},  {3630, 30},
+        {3590, 25},  {3550, 20},  {3500, 15},  {3440, 10},  {3360, 5},
+        {3300, 0},
+    };
+    const int n = (int)(sizeof(points) / sizeof(points[0]));
+
+    if (mv >= points[0][0]) {
+        return 100;
+    }
+    if (mv <= points[n - 1][0]) {
+        return 0;
+    }
+    for (int i = 0; i < n - 1; i++) {
+        const int hi_mv = points[i][0];
+        const int lo_mv = points[i + 1][0];
+        if (mv <= hi_mv && mv >= lo_mv) {
+            const int hi_pct = points[i][1];
+            const int lo_pct = points[i + 1][1];
+            const int span = hi_mv - lo_mv;
+            if (span <= 0) {
+                return hi_pct;
+            }
+            return lo_pct + (hi_pct - lo_pct) * (mv - lo_mv) / span;
+        }
+    }
+    return 0;
+}
+
+static int resolve_battery_percent(int gauge_pct, int mv, bool charging)
+{
+    const int from_v = soc_from_voltage_mv(mv);
+
+    if (gauge_pct < 0 || gauge_pct > 100) {
+        return from_v;
+    }
+
+    /* 电量计报 100% 但电压未到满电：按电压显示，最高 99。 */
+    if (gauge_pct >= 100 && mv > 0 && mv < BATT_FULL_MV) {
+        return from_v < 100 ? from_v : 99;
+    }
+
+    if (charging) {
+        /* 充电时端电压虚高，电压估会偏乐观；以电量计为主，但不超过电压估+5。 */
+        int capped = from_v + 5;
+        if (capped > 100) {
+            capped = 100;
+        }
+        return gauge_pct < capped ? gauge_pct : capped;
+    }
+
+    /* 静置：电压曲线通常比未标定电量计更贴近观感。 */
+    return from_v;
+}
 
 static int pmu_register_read(uint8_t devAddr, uint8_t regAddr, uint8_t *data, uint8_t len)
 {
@@ -105,9 +171,14 @@ extern "C" esp_err_t board_pmu_init(void)
         return ESP_FAIL;
     }
 
+    s_pmu.enableBattDetection();
     s_pmu.enableBattVoltageMeasure();
     s_pmu.enableVbusVoltageMeasure();
+    s_pmu.enableSystemVoltageMeasure();
     s_pmu.disableTSPinMeasure();
+    /* 开启电量计；不写 BROM 电池模型（无标定数据时只能靠电压校正）。 */
+    s_pmu.fuelGaugeControl(false, true);
+    s_pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
 
     /* 1.75C 上 AXP IRQ 不一定有可用 GPIO，改轮询状态寄存器。 */
     s_pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
@@ -165,9 +236,9 @@ extern "C" esp_err_t board_battery_get(board_battery_t *out)
     out->present = s_pmu.isBatteryConnect();
     out->charging = s_pmu.isCharging();
     if (out->present) {
-        int pct = s_pmu.getBatteryPercent();
-        out->percent = (pct >= 0 && pct <= 100) ? pct : -1;
+        const int gauge = s_pmu.getBatteryPercent();
         out->millivolts = (int)s_pmu.getBattVoltage();
+        out->percent = resolve_battery_percent(gauge, out->millivolts, out->charging);
     }
     return ESP_OK;
 }
